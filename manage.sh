@@ -7,8 +7,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TASKS="$SCRIPT_DIR/tasks"
-LOG="/tmp/agent-loop.log"
 CONFIG="$SCRIPT_DIR/agent-loop.json"
+
+# 跨平台进程查找
+find_pid() {
+    local pattern="$1"
+    if command -v pgrep >/dev/null 2>&1; then
+        pgrep -f "$pattern" 2>/dev/null | head -1
+    else
+        ps aux 2>/dev/null | grep "$pattern" | grep -v grep | awk '{print $2}' | head -1
+    fi
+}
 
 case "${1:-status}" in
     start)
@@ -18,7 +27,7 @@ case "${1:-status}" in
         fi
         echo "启动 agent-loop..."
         echo "配置: $CONFIG"
-        echo "日志: $LOG"
+        echo "日志: /tmp/agent-loop-*.log"
         echo "按 Ctrl+C 停止前台运行"
         bash "$SCRIPT_DIR/loop.sh" "$CONFIG"
         ;;
@@ -37,7 +46,10 @@ case "${1:-status}" in
         fi
         echo ""
         echo "--- 当前阶段 ---"
+        local_found=false
         for f in "$SCRIPT_DIR"/phases/*.md; do
+            [ -f "$f" ] || continue
+            local_found=true
             phase=$(basename "$f" .md)
             if [ -f "$TASKS/phases/$phase.done" ]; then
                 echo "  ✅ $phase"
@@ -46,45 +58,52 @@ case "${1:-status}" in
                 break
             fi
         done
-        echo ""
-        echo "--- 最近日志 ---"
-        tail -5 "$LOG" 2>/dev/null || echo "无日志"
+        [ "$local_found" = false ] && echo "  无阶段文件"
         echo ""
         echo "--- 进程 ---"
-        pgrep -f "opencode run" >/dev/null 2>&1 && echo "  OpenCode: 运行中" || echo "  OpenCode: 未运行"
-        pgrep -f "claude -p" >/dev/null 2>&1 && echo "  Claude: 运行中" || echo "  Claude: 未运行"
+        if [ -n "$(find_pid "opencode run")" ]; then
+            echo "  OpenCode (OC): 运行中"
+        else
+            echo "  OpenCode (OC): 未运行"
+        fi
+        if [ -n "$(find_pid "claude -p")" ]; then
+            echo "  Claude (CC): 运行中"
+        else
+            echo "  Claude (CC): 未运行"
+        fi
+        echo ""
+        echo "--- 日志 ---"
+        local latest_log=$(ls -t /tmp/agent-loop-*.log 2>/dev/null | head -1)
+        if [ -n "$latest_log" ]; then
+            tail -5 "$latest_log"
+        else
+            echo "  无日志"
+        fi
         ;;
 
     history)
         echo "=== 执行历史 ==="
         echo ""
-        if [ ! -d "$TASKS" ] || [ -z "$(ls "$TASKS"/round-*-commander.log 2>/dev/null)" ]; then
+        if [ ! -d "$TASKS" ] || [ -z "$(find "$TASKS" -name "round-*-commander.log" 2>/dev/null)" ]; then
             echo "无执行记录"
             exit 0
         fi
 
         for clog in "$TASKS"/round-*-commander.log; do
             [ -f "$clog" ] || continue
-            round=$(basename "$clog" | grep -o '[0-9]*')
+            round=$(basename "$clog" | sed 's/round-\([0-9]*\)-.*/\1/')
             wlog="$TASKS/round-${round}-worker.log"
 
             echo "━━━ Round $round ━━━"
 
-            # 主 OC 状态
             if [ -f "$clog" ]; then
-                echo "  主 OC: $(tail -1 "$clog" 2>/dev/null | head -c 80)"
+                echo "  主会话: $(tail -1 "$clog" 2>/dev/null | head -c 80)"
             fi
 
-            # 工人 OC 状态
             if [ -f "$wlog" ]; then
-                echo "  工人 OC: $(tail -1 "$wlog" 2>/dev/null | head -c 80)"
+                echo "  工人会话: $(tail -1 "$wlog" 2>/dev/null | head -c 80)"
             else
-                echo "  工人 OC: 未执行"
-            fi
-
-            # 报告摘要
-            if [ -f "$TASKS/report.md" ]; then
-                echo "  报告: $(head -5 "$TASKS/report.md" 2>/dev/null | tail -1)"
+                echo "  工人会话: 未执行"
             fi
 
             echo ""
@@ -95,11 +114,17 @@ case "${1:-status}" in
         rm -rf "$TASKS/phases"/*.done "$TASKS/.done" "$TASKS/commander-session.txt"
         rm -f "$TASKS"/round-*.log
         rm -f "$TASKS/next-plan.md" "$TASKS/report.md" "$TASKS/progress.md"
+        rm -rf "$TASKS/reports"
         echo "已重置。可以重新开始。"
         ;;
 
     log)
-        tail -30 "$LOG" 2>/dev/null || echo "无日志"
+        local latest_log=$(ls -t /tmp/agent-loop-*.log 2>/dev/null | head -1)
+        if [ -n "$latest_log" ]; then
+            tail -30 "$latest_log"
+        else
+            echo "无日志"
+        fi
         ;;
 
     *)

@@ -27,7 +27,7 @@
 2. "你希望用哪个 Agent 来执行？"
    - OpenCode（推荐，支持多模型）
    - Claude Code
-   - 混搭（主 OC 用 A，工人用 B）
+   - 混搭（主会话用 A，工人用 B）
 
 3. "每轮任务的时间限制？"
    - 建议：20-30 分钟
@@ -117,13 +117,13 @@
 
 | 字段 | 说明 | 默认值 |
 |------|------|--------|
-| `commander_agent` | 主 OC 用哪个 Agent | `"opencode"` |
-| `worker_agent` | 工人 OC 用哪个 Agent | `"opencode"` |
+| `commander_agent` | 主会话用哪个 Agent | `"opencode"` |
+| `worker_agent` | 工人会话用哪个 Agent | `"opencode"` |
 | `project_dir` | 目标项目绝对路径 | `"."` |
 | `timeout_minutes` | 每轮超时时间 | `30` |
 | `phases` | 阶段列表（逗号分隔） | 见模板 |
-| `commander_extra_instructions` | 给主 OC 的额外指令 | `""` |
-| `worker_extra_instructions` | 给工人 OC 的额外指令 | `""` |
+| `commander_extra_instructions` | 给主会话的额外指令 | `""` |
+| `worker_extra_instructions` | 给工人会话的额外指令 | `""` |
 
 ## 第五步：验证配置
 

@@ -7,7 +7,7 @@ AI 自动循环引擎 — 让 AI Agent 自己打磨项目，你去睡觉。
 ### 第一步：安装（一行）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/USER/agent-loop/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ls18166407597-design/agent-loop/main/install.sh | bash
 ```
 
 ### 第二步：告诉你的 Agent
@@ -48,12 +48,12 @@ Agent 会帮你查看状态、处理问题、调整配置。
 
 ## 支持的 Agent
 
-| Agent | 主 OC | 工人 OC |
+| Agent | 主会话 | 工人会话 |
 |-------|:-----:|:------:|
-| OpenCode | ✅ | ✅ |
-| Claude Code | ✅ | ✅ |
+| OpenCode (OC) | ✅ | ✅ |
+| Claude Code (CC) | ✅ | ✅ |
 
-可以混搭。
+可以混搭：OC 做主会话 + CC 做工人，或反过来。
 
 ## 命令参考
 

@@ -1,11 +1,11 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────
 # agent-loop 安装脚本
-# 用法：curl -fsSL https://raw.githubusercontent.com/USER/agent-loop/main/install.sh | bash
+# 用法：curl -fsSL https://raw.githubusercontent.com/ls18166407597-design/agent-loop/main/install.sh | bash
 # ─────────────────────────────────────────────────────────────
 set -euo pipefail
 
-REPO="https://github.com/USER/agent-loop.git"
+REPO="https://github.com/ls18166407597-design/agent-loop.git"
 INSTALL_DIR="$HOME/.agent-loop"
 BIN_DIR="$HOME/.local/bin"
 
@@ -13,7 +13,7 @@ echo "=== agent-loop 安装 ==="
 echo ""
 
 # ─── 检查依赖 ───
-for cmd in bash jq; do
+for cmd in bash jq git; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "❌ 缺少依赖: $cmd"
         if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -41,7 +41,6 @@ fi
 # ─── 设置 PATH ───
 mkdir -p "$BIN_DIR"
 
-# 创建代理脚本
 cat > "$BIN_DIR/agent-loop" << 'WRAPPER'
 #!/bin/bash
 # agent-loop 代理脚本
@@ -64,6 +63,9 @@ case "${1:-help}" in
     log)
         bash "$INSTALL_DIR/manage.sh" log
         ;;
+    history)
+        bash "$INSTALL_DIR/manage.sh" history
+        ;;
     reset)
         bash "$INSTALL_DIR/manage.sh" reset
         ;;
@@ -76,6 +78,7 @@ case "${1:-help}" in
         echo "  agent-loop stop                    停止循环"
         echo "  agent-loop status                  查看状态"
         echo "  agent-loop log                     查看日志"
+        echo "  agent-loop history                 查看执行历史"
         echo "  agent-loop reset                   重置"
         echo ""
         echo "配置文件: ~/.agent-loop/agent-loop.json"
@@ -85,26 +88,43 @@ esac
 WRAPPER
 chmod +x "$BIN_DIR/agent-loop"
 
-# ─── 检查 PATH ───
+# ─── 检测 shell 并设置 PATH ───
 SHELL_RC=""
-if [ -f "$HOME/.zshrc" ]; then
+if [[ "$SHELL" == */zsh ]]; then
     SHELL_RC="$HOME/.zshrc"
-elif [ -f "$HOME/.bashrc" ]; then
-    SHELL_RC="$HOME/.bashrc"
-elif [ -f "$HOME/.bash_profile" ]; then
-    SHELL_RC="$HOME/.bash_profile"
-fi
-
-if echo "$PATH" | grep -q "$BIN_DIR"; then
-    echo "✅ PATH 已包含 $BIN_DIR"
-elif [ -n "$SHELL_RC" ]; then
-    echo "" >> "$SHELL_RC"
-    echo "# agent-loop" >> "$SHELL_RC"
-    echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$SHELL_RC"
+    [ ! -f "$SHELL_RC" ] && touch "$SHELL_RC"
+elif [[ "$SHELL" == */fish ]]; then
+    SHELL_RC="$HOME/.config/fish/config.fish"
+    mkdir -p "$(dirname "$SHELL_RC")"
+    if ! grep -q ".local/bin" "$SHELL_RC" 2>/dev/null; then
+        echo 'set -gx PATH $HOME/.local/bin $PATH' >> "$SHELL_RC"
+    fi
     echo "✅ 已添加 PATH 到 $SHELL_RC"
     echo "   请运行: source $SHELL_RC"
-else
-    echo "⚠️  请手动添加 $BIN_DIR 到 PATH"
+    SHELL_RC=""
+elif [[ "$SHELL" == */bash ]]; then
+    # macOS bash 用 .bash_profile，Linux bash 用 .bashrc
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        SHELL_RC="$HOME/.bash_profile"
+        [ ! -f "$SHELL_RC" ] && SHELL_RC="$HOME/.bashrc"
+    else
+        SHELL_RC="$HOME/.bashrc"
+        [ ! -f "$SHELL_RC" ] && SHELL_RC="$HOME/.profile"
+    fi
+fi
+
+if [ -n "$SHELL_RC" ]; then
+    if echo "$PATH" | grep -q "$BIN_DIR"; then
+        echo "✅ PATH 已包含 $BIN_DIR"
+    elif grep -q ".local/bin" "$SHELL_RC" 2>/dev/null; then
+        echo "✅ PATH 已在 $SHELL_RC 中配置"
+    else
+        echo "" >> "$SHELL_RC"
+        echo "# agent-loop" >> "$SHELL_RC"
+        echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$SHELL_RC"
+        echo "✅ 已添加 PATH 到 $SHELL_RC"
+        echo "   请运行: source $SHELL_RC"
+    fi
 fi
 
 # ─── 完成 ───
@@ -118,4 +138,4 @@ echo ""
 echo "或者让 Agent 配置："
 echo "  在 OpenCode/Claude Code 中说: 读取 ~/.agent-loop/SETUP-GUIDE.md，帮我配置"
 echo ""
-echo "管理命令: agent-loop [start|stop|status|log|reset|help]"
+echo "管理命令: agent-loop [start|stop|status|log|history|reset|help]"

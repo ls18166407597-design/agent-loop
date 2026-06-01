@@ -41,10 +41,14 @@ if [ -f "$PROJECT_DIR/package.json" ]; then
 fi
 
 # 检查测试
-[ -d "$PROJECT_DIR/__tests__" ] || [ -d "$PROJECT_DIR/test" ] || [ -d "$PROJECT_DIR/tests" ] || [ -d "$PROJECT_DIR/src/__tests__" ] && HAS_TESTS=true
+if [ -d "$PROJECT_DIR/__tests__" ] || [ -d "$PROJECT_DIR/test" ] || [ -d "$PROJECT_DIR/tests" ] || [ -d "$PROJECT_DIR/src/__tests__" ]; then
+    HAS_TESTS=true
+fi
 
 # 检查文档
-[ -f "$PROJECT_DIR/README.md" ] || [ -f "$PROJECT_DIR/CLAUDE.md" ] || [ -d "$PROJECT_DIR/docs" ] && HAS_DOCS=true
+if [ -f "$PROJECT_DIR/README.md" ] || [ -f "$PROJECT_DIR/CLAUDE.md" ] || [ -d "$PROJECT_DIR/docs" ]; then
+    HAS_DOCS=true
+fi
 
 echo "检测结果："
 echo "  项目类型: $PROJECT_TYPE"
