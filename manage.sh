@@ -1,9 +1,9 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────
 # agent-loop 管理工具
-# 用法：./manage.sh [start|stop|status|reset|log|history]
+# 用法：manage.sh [start|stop|status|reset|log|history]
 # ─────────────────────────────────────────────────────────────
-set -euo pipefail
+set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TASKS="$SCRIPT_DIR/tasks"
@@ -11,19 +11,23 @@ CONFIG="$SCRIPT_DIR/agent-loop.json"
 
 # 跨平台进程查找
 find_pid() {
-    local pattern="$1"
     if command -v pgrep >/dev/null 2>&1; then
-        pgrep -f "$pattern" 2>/dev/null | head -1
+        pgrep -f "$1" 2>/dev/null | head -1
     else
-        ps aux 2>/dev/null | grep "$pattern" | grep -v grep | awk '{print $2}' | head -1
+        ps aux 2>/dev/null | grep "$1" | grep -v grep | awk '{print $2}' | head -1
     fi
+}
+
+get_latest_log() {
+    ls -t /tmp/agent-loop-*.log 2>/dev/null | head -1
 }
 
 case "${1:-status}" in
     start)
+        mkdir -p "$TASKS"
         if [ -f "$TASKS/.done" ]; then
-            echo "守护已完成。用 './manage.sh reset' 重置后再启动。"
-            exit 1
+            echo "守护已完成。用 'manage.sh reset' 重置后再启动。"
+            exit 0
         fi
         echo "启动 agent-loop..."
         echo "配置: $CONFIG"
@@ -33,6 +37,7 @@ case "${1:-status}" in
         ;;
 
     stop)
+        mkdir -p "$TASKS"
         touch "$TASKS/.done"
         echo "已标记停止，当前轮次完成后退出。"
         ;;
@@ -46,10 +51,10 @@ case "${1:-status}" in
         fi
         echo ""
         echo "--- 当前阶段 ---"
-        local_found=false
+        has_phases=false
         for f in "$SCRIPT_DIR"/phases/*.md; do
             [ -f "$f" ] || continue
-            local_found=true
+            has_phases=true
             phase=$(basename "$f" .md)
             if [ -f "$TASKS/phases/$phase.done" ]; then
                 echo "  ✅ $phase"
@@ -58,7 +63,7 @@ case "${1:-status}" in
                 break
             fi
         done
-        [ "$local_found" = false ] && echo "  无阶段文件"
+        [ "$has_phases" = false ] && echo "  无阶段文件"
         echo ""
         echo "--- 进程 ---"
         if [ -n "$(find_pid "opencode run")" ]; then
@@ -72,8 +77,8 @@ case "${1:-status}" in
             echo "  Claude (CC): 未运行"
         fi
         echo ""
-        echo "--- 日志 ---"
-        local latest_log=$(ls -t /tmp/agent-loop-*.log 2>/dev/null | head -1)
+        echo "--- 最近日志 ---"
+        latest_log=$(get_latest_log)
         if [ -n "$latest_log" ]; then
             tail -5 "$latest_log"
         else
@@ -84,7 +89,7 @@ case "${1:-status}" in
     history)
         echo "=== 执行历史 ==="
         echo ""
-        if [ ! -d "$TASKS" ] || [ -z "$(find "$TASKS" -name "round-*-commander.log" 2>/dev/null)" ]; then
+        if [ ! -d "$TASKS" ] || [ -z "$(find "$TASKS" -maxdepth 1 -name "round-*-commander.log" 2>/dev/null)" ]; then
             echo "无执行记录"
             exit 0
         fi
@@ -95,17 +100,12 @@ case "${1:-status}" in
             wlog="$TASKS/round-${round}-worker.log"
 
             echo "━━━ Round $round ━━━"
-
-            if [ -f "$clog" ]; then
-                echo "  主会话: $(tail -1 "$clog" 2>/dev/null | head -c 80)"
-            fi
-
+            [ -f "$clog" ] && echo "  主会话: $(tail -1 "$clog" 2>/dev/null | head -c 80)"
             if [ -f "$wlog" ]; then
                 echo "  工人会话: $(tail -1 "$wlog" 2>/dev/null | head -c 80)"
             else
                 echo "  工人会话: 未执行"
             fi
-
             echo ""
         done
         ;;
@@ -119,7 +119,7 @@ case "${1:-status}" in
         ;;
 
     log)
-        local latest_log=$(ls -t /tmp/agent-loop-*.log 2>/dev/null | head -1)
+        latest_log=$(get_latest_log)
         if [ -n "$latest_log" ]; then
             tail -30 "$latest_log"
         else

@@ -5,13 +5,16 @@
 opencode_get_pattern() { echo "opencode run"; }
 
 opencode_validate_session() {
-    local session_id="$1"
-    [ -z "$session_id" ] && return 1
-    [ -f "${XDG_DATA_HOME:-$HOME/.local/share}/opencode/storage/session_diff/${session_id}.json" ]
+    [ -z "$1" ] && return 1
+    [ -f "${XDG_DATA_HOME:-$HOME/.local/share}/opencode/storage/session_diff/${1}.json" ]
 }
 
 opencode_get_latest_session() {
-    ls -t "${XDG_DATA_HOME:-$HOME/.local/share}/opencode/storage/session_diff/"*.json 2>/dev/null | head -1 | xargs basename 2>/dev/null | sed "s/.json//"
+    local dir="${XDG_DATA_HOME:-$HOME/.local/share}/opencode/storage/session_diff"
+    [ -d "$dir" ] || return 0
+    ls -t "$dir"/*.json 2>/dev/null | head -1 | while read -r f; do
+        basename "$f" .json 2>/dev/null
+    done
 }
 
 opencode_invoke() {
@@ -19,6 +22,7 @@ opencode_invoke() {
     local logfile="$2"
     local session_id="${3:-}"
 
+    # 验证 session
     if [ -n "$session_id" ] && ! opencode_validate_session "$session_id"; then
         session_id=""
     fi

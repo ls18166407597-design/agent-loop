@@ -6,16 +6,13 @@
 # 支持：macOS / Linux / Windows(WSL)
 # 支持：OpenCode (OC) / Claude Code (CC)
 # ─────────────────────────────────────────────────────────────
-set -euo pipefail
+set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="${1:-$SCRIPT_DIR/agent-loop.json}"
 TASKS="$SCRIPT_DIR/tasks"
-LOG="/tmp/agent-loop-$$.log"
-LOCK="/tmp/agent-loop-$$.lock"
 
-log() { echo "[$(date +%H:%M:%S)] $1" >> "$LOG"; }
-
+# ─── 依赖检查 ───
 for cmd in jq; do
     command -v "$cmd" >/dev/null 2>&1 || { echo "需要 jq，请先安装"; exit 1; }
 done
@@ -34,29 +31,40 @@ WORKER_EXTRA=$(jq -r '.worker_extra_instructions // ""' "$CONFIG")
 [[ "$PROJECT_DIR" != /* ]] && PROJECT_DIR="$SCRIPT_DIR/$PROJECT_DIR"
 [ -d "$PROJECT_DIR" ] || { echo "项目目录不存在: $PROJECT_DIR"; exit 1; }
 
-# 用项目路径哈希作为锁/日志前缀，支持多项目并行
-PROJECT_HASH=$(echo "$PROJECT_DIR" | md5sum 2>/dev/null | cut -c1-8 || md5 -q -s "$PROJECT_DIR" 2>/dev/null | cut -c1-8 || echo "default")
+# 用项目路径哈希隔离锁/日志
+if command -v md5sum >/dev/null 2>&1; then
+    PROJECT_HASH=$(echo -n "$PROJECT_DIR" | md5sum | cut -c1-8)
+elif command -v md5 >/dev/null 2>&1; then
+    PROJECT_HASH=$(echo -n "$PROJECT_DIR" | md5 | cut -c1-8)
+else
+    PROJECT_HASH="default"
+fi
+
 LOG="/tmp/agent-loop-${PROJECT_HASH}.log"
 LOCK="/tmp/agent-loop-${PROJECT_HASH}.lock"
+
+log() {
+    local msg="[$(date +%H:%M:%S)] $1"
+    echo "$msg" >> "$LOG"
+    [ -t 1 ] && echo "$msg"  # 终端时同时输出到屏幕
+}
 
 IFS=',' read -ra PHASES <<< "$PHASES_STR"
 
 # ─── 跨平台工具函数 ───
 file_mtime() {
-    local f="$1"
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        stat -f %m "$f" 2>/dev/null || echo 0
+        stat -f %m "$1" 2>/dev/null || echo 0
     else
-        stat -c %Y "$f" 2>/dev/null || echo 0
+        stat -c %Y "$1" 2>/dev/null || echo 0
     fi
 }
 
 find_pid() {
-    local pattern="$1"
     if command -v pgrep >/dev/null 2>&1; then
-        pgrep -f "$pattern" 2>/dev/null | head -1
+        pgrep -f "$1" 2>/dev/null | head -1
     else
-        ps aux 2>/dev/null | grep "$pattern" | grep -v grep | awk '{print $2}' | head -1
+        ps aux 2>/dev/null | grep "$1" | grep -v grep | awk '{print $2}' | head -1
     fi
 }
 
@@ -68,15 +76,15 @@ pid_start_time() {
         local lstart=$(ps -o lstart= -p "$pid" 2>/dev/null | tr -s ' ')
         if [ -n "$lstart" ]; then
             if [[ "$OSTYPE" == "darwin"* ]]; then
-                date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null || echo $(date +%s)
+                date -j -f "%a %b %d %T %Y" "$lstart" +%s 2>/dev/null || date +%s
             else
-                date -d "$lstart" +%s 2>/dev/null || echo $(date +%s)
+                date -d "$lstart" +%s 2>/dev/null || date +%s
             fi
         else
-            echo $(date +%s)
+            date +%s
         fi
     else
-        echo $(date +%s)
+        date +%s
     fi
 }
 
@@ -89,9 +97,16 @@ fi
 touch "$LOCK"
 trap 'rm -f "$LOCK"' EXIT
 
+# ─── 完成标记 ───
+mkdir -p "$TASKS" "$TASKS/reports" "$TASKS/phases"
 [ -f "$TASKS/.done" ] && exit 0
 
-# ─── 加载适配器（带命名空间）───
+# ─── 验证适配器 ───
+for agent in "$COMMANDER_AGENT" "$WORKER_AGENT"; do
+    [ -f "$SCRIPT_DIR/adapters/$agent.sh" ] || { echo "适配器不存在: $agent.sh"; exit 1; }
+done
+
+# ─── 加载适配器 ───
 source "$SCRIPT_DIR/adapters/$COMMANDER_AGENT.sh"
 CMD_PATTERN=$(${COMMANDER_AGENT}_get_pattern)
 
@@ -107,7 +122,7 @@ check_and_kill() {
     local start=$(pid_start_time "$pid")
     local age=$(( ($(date +%s) - start) / 60 ))
     if [ "$age" -ge "$TIMEOUT" ]; then
-        kill -- "-$pid" 2>/dev/null || kill -9 "$pid" 2>/dev/null
+        kill -TERM -- "-$pid" 2>/dev/null || kill -9 "$pid" 2>/dev/null
         log "超时 kill ($pattern, AGE=${age}min)"
         return 1
     fi
@@ -121,16 +136,18 @@ if [ -n "$(find_pid "$CMD_PATTERN")" ] || [ -n "$(find_pid "$WORK_PATTERN")" ]; 
 fi
 
 # ─── 初始化 ───
-mkdir -p "$TASKS/reports" "$TASKS/phases"
-ROUND=$(find "$TASKS" -name "round-*-commander.log" 2>/dev/null | wc -l | tr -d ' ')
+ROUND=$(find "$TASKS" -maxdepth 1 -name "round-*-commander.log" 2>/dev/null | wc -l | tr -d ' ')
 ROUND=$((ROUND + 1))
 
 # ─── 当前阶段 ───
 CURRENT_PHASE=""
 for phase in "${PHASES[@]}"; do
-    phase=$(echo "$phase" | tr -d ' ')
+    phase=$(echo "$phase" | tr -d '[:space:]')
     [ -z "$phase" ] && continue
-    [ ! -f "$TASKS/phases/$phase.done" ] && CURRENT_PHASE="$phase" && break
+    if [ ! -f "$TASKS/phases/$phase.done" ]; then
+        CURRENT_PHASE="$phase"
+        break
+    fi
 done
 
 if [ -z "$CURRENT_PHASE" ]; then
@@ -139,8 +156,15 @@ if [ -z "$CURRENT_PHASE" ]; then
     exit 0
 fi
 
-PHASE_DESC=$(cat "$SCRIPT_DIR/phases/$CURRENT_PHASE.md" 2>/dev/null || echo "无阶段定义")
-log "Round $ROUND: 阶段=$CURRENT_PHASE agent=$COMMANDER_AGENT/$WORKER_AGENT project=$PROJECT_DIR"
+PHASE_FILE="$SCRIPT_DIR/phases/$CURRENT_PHASE.md"
+if [ ! -f "$PHASE_FILE" ]; then
+    log "阶段文件不存在: $PHASE_FILE"
+    echo "错误: 阶段文件不存在: $PHASE_FILE" >&2
+    exit 1
+fi
+
+PHASE_DESC=$(cat "$PHASE_FILE")
+log "Round $ROUND: 阶段=$CURRENT_PHASE agent=$COMMANDER_AGENT/$WORKER_AGENT"
 
 # ─── 指令 ───
 COMMANDER_CMD="你是质量守护指挥官。
@@ -193,12 +217,21 @@ log "Round $ROUND: 主会话启动 ($COMMANDER_AGENT, session=${CMD_SESSION_ID:-
 CMD_OUTPUT=$(cd "$PROJECT_DIR" && ${COMMANDER_AGENT}_invoke "$COMMANDER_CMD" "$RLOG" "$CMD_SESSION_ID" "$PROJECT_DIR" 2>&1)
 CMD_EXIT=$?
 
-NEW_CMD_SESSION=$(echo "$CMD_OUTPUT" | tail -1 | tr -d '[:space:]' | grep -o '[a-f0-9-]\{36\}\|[a-zA-Z0-9_-]\{20,\}' || true)
+# 提取 session ID（UUID 格式或长字符串）
+NEW_CMD_SESSION=$(echo "$CMD_OUTPUT" | tail -1 | tr -d '[:space:]' | grep -oE '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}' | head -1 || true)
+if [ -z "$NEW_CMD_SESSION" ]; then
+    NEW_CMD_SESSION=$(echo "$CMD_OUTPUT" | tail -1 | tr -d '[:space:]' | grep -oE '[a-zA-Z0-9_-]{20,}' | head -1 || true)
+fi
 [ -n "$NEW_CMD_SESSION" ] && echo "$NEW_CMD_SESSION" > "$CMD_SESSION_FILE"
 log "主会话 EXIT=$CMD_EXIT session=$NEW_CMD_SESSION"
 
 # ─── 检查计划 ───
-if [ ! -f "$TASKS/next-plan.md" ] || ! grep -q "任务\|目标\|步骤\|执行" "$TASKS/next-plan.md" 2>/dev/null; then
+if [ ! -f "$TASKS/next-plan.md" ]; then
+    log "无计划文件，跳过"
+    exit 0
+fi
+
+if ! grep -qiE "task|goal|step|任务|目标|步骤|执行|plan" "$TASKS/next-plan.md" 2>/dev/null; then
     log "无有效计划，跳过"
     exit 0
 fi
@@ -211,9 +244,11 @@ WORK_EXIT=$?
 log "工人会话 EXIT=$WORK_EXIT"
 
 # ─── 阶段完成检查 ───
-if [ "$WORK_EXIT" -eq 0 ] && [ -f "$TASKS/report.md" ] && grep -q "全部完成\|阶段完成\|所有目标" "$TASKS/report.md" 2>/dev/null; then
-    touch "$TASKS/phases/$CURRENT_PHASE.done"
-    log "阶段 $CURRENT_PHASE 完成"
+if [ "$WORK_EXIT" -eq 0 ] && [ -f "$TASKS/report.md" ]; then
+    if grep -qiE "完成|done|complete|success|通过|passed" "$TASKS/report.md" 2>/dev/null; then
+        touch "$TASKS/phases/$CURRENT_PHASE.done"
+        log "阶段 $CURRENT_PHASE 完成"
+    fi
 fi
 
 log "Round $ROUND 完成"
