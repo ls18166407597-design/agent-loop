@@ -1,0 +1,9 @@
+{
+  "commander_agent": "opencode",
+  "worker_agent": "claude",
+  "project_dir": "/path/to/your/project",
+  "timeout_minutes": 30,
+  "phases": "01-setup,02-tests,03-security,04-docs,05-frontend,06-e2e,07-final",
+  "commander_extra_instructions": "",
+  "worker_extra_instructions": ""
+}
