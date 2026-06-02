@@ -171,7 +171,7 @@ PHASE_DESC=$(cat "$PHASE_FILE")
 log "Round $ROUND: 阶段=$CURRENT_PHASE agent=$COMMANDER_AGENT/$WORKER_AGENT"
 
 # ─── 指令 ───
-COMMANDER_CMD="你是质量守护指挥官。
+COMMANDER_CMD="你是规划会话。
 
 当前阶段：$CURRENT_PHASE
 阶段目标：
@@ -189,7 +189,7 @@ $PHASE_DESC
 
 $COMMANDER_EXTRA"
 
-WORKER_CMD="你是质量守护工作会话。
+WORKER_CMD="你是执行会话。
 
 读取 tasks/next-plan.md 了解工作计划。
 按照计划执行。完成后写报告到 tasks/report.md。
@@ -209,14 +209,14 @@ WORKER_CMD="你是质量守护工作会话。
 
 $WORKER_EXTRA"
 
-# ─── 主会话 session ───
+# ─── 规划会话 session ───
 CMD_SESSION_FILE="$TASKS/commander-session.txt"
 CMD_SESSION_ID=""
 [ -f "$CMD_SESSION_FILE" ] && [ -s "$CMD_SESSION_FILE" ] && CMD_SESSION_ID=$(cat "$CMD_SESSION_FILE")
 
 # ─── 执行主会话 ───
 RLOG="$TASKS/round-$(printf "%03d" $ROUND)-commander.log"
-log "Round $ROUND: 主会话启动 ($COMMANDER_AGENT, session=${CMD_SESSION_ID:-新建})"
+log "Round $ROUND: 规划会话启动 ($COMMANDER_AGENT, session=${CMD_SESSION_ID:-新建})"
 
 CMD_OUTPUT=$(cd "$PROJECT_DIR" && ${COMMANDER_AGENT}_invoke "$COMMANDER_CMD" "$RLOG" "$CMD_SESSION_ID" "$PROJECT_DIR" 2>&1)
 CMD_EXIT=$?
@@ -227,7 +227,7 @@ if [ -z "$NEW_CMD_SESSION" ]; then
     NEW_CMD_SESSION=$(echo "$CMD_OUTPUT" | tail -1 | tr -d '[:space:]' | grep -oE '[a-zA-Z0-9_-]{20,}' | head -1 || true)
 fi
 [ -n "$NEW_CMD_SESSION" ] && echo "$NEW_CMD_SESSION" > "$CMD_SESSION_FILE"
-log "主会话 EXIT=$CMD_EXIT session=$NEW_CMD_SESSION"
+log "规划会话 EXIT=$CMD_EXIT session=$NEW_CMD_SESSION"
 
 # ─── 检查计划（兼容 agent-loop/tasks 和 项目/tasks 两个路径）───
 PLAN_FILE=""
@@ -250,12 +250,12 @@ fi
 # 复制到 agent-loop/tasks 统一管理
 cp "$PLAN_FILE" "$TASKS/next-plan.md" 2>/dev/null || true
 
-# ─── 执行工人会话 ───
+# ─── 执行执行会话 ───
 WLOG="$TASKS/round-$(printf "%03d" $ROUND)-worker.log"
-log "Round $ROUND: 工人会话启动 ($WORKER_AGENT)"
+log "Round $ROUND: 执行会话启动 ($WORKER_AGENT)"
 WORK_OUTPUT=$(cd "$PROJECT_DIR" && ${WORKER_AGENT}_invoke "$WORKER_CMD" "$WLOG" "" "$PROJECT_DIR" 2>&1)
 WORK_EXIT=$?
-log "工人会话 EXIT=$WORK_EXIT"
+log "执行会话 EXIT=$WORK_EXIT"
 
 # ─── 阶段完成检查（兼容两个 tasks 路径）───
 REPORT_FILE=""

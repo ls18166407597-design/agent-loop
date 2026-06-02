@@ -103,11 +103,11 @@ case "${1:-status}" in
             wlog="$TASKS/round-${round}-worker.log"
 
             echo "━━━ Round $round ━━━"
-            [ -f "$clog" ] && echo "  主会话: $(tail -1 "$clog" 2>/dev/null | head -c 80)"
+            [ -f "$clog" ] && echo "  规划会话: $(tail -1 "$clog" 2>/dev/null | head -c 80)"
             if [ -f "$wlog" ]; then
-                echo "  工人会话: $(tail -1 "$wlog" 2>/dev/null | head -c 80)"
+                echo "  执行会话: $(tail -1 "$wlog" 2>/dev/null | head -c 80)"
             else
-                echo "  工人会话: 未执行"
+                echo "  执行会话: 未执行"
             fi
             echo ""
         done
