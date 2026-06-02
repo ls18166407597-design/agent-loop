@@ -6,10 +6,15 @@ claude_get_pattern() { echo "claude -p"; }
 
 claude_get_latest_session() {
     local project_dir="${1:-$(pwd)}"
-    # Claude Code 会话存储在 ~/.claude/projects/ 下
-    local sessions_base="$HOME/.claude/projects"
+    # Claude Code 会话存储路径（跨平台）
+    local sessions_base=""
+    if [ -d "$HOME/.claude/projects" ]; then
+        sessions_base="$HOME/.claude/projects"
+    elif [ -d "$HOME/Library/Application Support/claude/projects" ]; then
+        sessions_base="$HOME/Library/Application Support/claude/projects"
+    fi
 
-    [ -d "$sessions_base" ] || return 0
+    [ -n "$sessions_base" ] && [ -d "$sessions_base" ] || return 0
 
     # 找最新的会话目录（按修改时间）
     find "$sessions_base" -maxdepth 2 -mindepth 2 -type d 2>/dev/null | while read -r d; do
@@ -31,18 +36,28 @@ claude_invoke() {
     local cmd="$1"
     local logfile="$2"
     local session_id="${3:-}"
+    local work_dir="${4:-$(pwd)}"
 
+    # 检查 claude 是否安装
+    if ! command -v claude >/dev/null 2>&1; then
+        echo "错误: claude 命令未找到，请先安装 Claude Code CLI" > "$logfile"
+        return 1
+    fi
+
+    local stderr_file="${logfile}.stderr"
     if [ -n "$session_id" ]; then
         printf '%s' "$cmd" | claude -p \
             --dangerously-skip-permissions \
             --resume "$session_id" \
             --output-format text \
-            > "$logfile" 2>&1
+            --cwd "$work_dir" \
+            > "$logfile" 2>"$stderr_file"
     else
         printf '%s' "$cmd" | claude -p \
             --dangerously-skip-permissions \
             --output-format text \
-            > "$logfile" 2>&1
+            --cwd "$work_dir" \
+            > "$logfile" 2>"$stderr_file"
     fi
     local exit_code=$?
 

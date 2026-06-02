@@ -5,6 +5,9 @@
 # ─────────────────────────────────────────────────────────────
 set -eo pipefail
 
+# cron/最小环境 PATH 补全（macOS: /usr/local/bin, Linux: /usr/local/bin）
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TASKS="$SCRIPT_DIR/tasks"
 CONFIG="$SCRIPT_DIR/agent-loop.json"

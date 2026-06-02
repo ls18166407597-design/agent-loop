@@ -21,6 +21,7 @@ opencode_invoke() {
     local cmd="$1"
     local logfile="$2"
     local session_id="${3:-}"
+    local work_dir="${4:-$(pwd)}"
 
     # 验证 session
     if [ -n "$session_id" ] && ! opencode_validate_session "$session_id"; then
@@ -29,13 +30,15 @@ opencode_invoke() {
 
     local before_session=$(opencode_get_latest_session)
 
+    # 按旧版逻辑：echo pipe + 直接运行（不捕获到子 shell）
     if [ -n "$session_id" ]; then
-        printf '%s' "$cmd" | opencode run -s "$session_id" > "$logfile" 2>&1
+        echo "$cmd" | opencode run -s "$session_id" --dangerously-skip-permissions --dir "$work_dir" > "$logfile" 2>&1
     else
-        printf '%s' "$cmd" | opencode run > "$logfile" 2>&1
+        echo "$cmd" | opencode run --dangerously-skip-permissions --dir "$work_dir" > "$logfile" 2>&1
     fi
     local exit_code=$?
 
+    # 从文件系统读 session ID（不用子 shell 捕获输出）
     local after_session=$(opencode_get_latest_session)
     if [ -n "$after_session" ] && [ "$after_session" != "$before_session" ]; then
         echo "$after_session"

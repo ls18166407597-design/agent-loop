@@ -7,6 +7,9 @@
 # ─────────────────────────────────────────────────────────────
 set -eo pipefail
 
+# cron/最小环境 PATH 补全
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="${1:-.}"
 AGENT="${2:-opencode}"

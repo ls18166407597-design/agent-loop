@@ -8,6 +8,9 @@
 # ─────────────────────────────────────────────────────────────
 set -eo pipefail
 
+# cron 环境 PATH 不含 /usr/local/bin，手动补全
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="${1:-$SCRIPT_DIR/agent-loop.json}"
 TASKS="$SCRIPT_DIR/tasks"
@@ -88,14 +91,15 @@ pid_start_time() {
     fi
 }
 
-# ─── 防卡死 ───
-if [ -f "$LOCK" ]; then
+# ─── 防卡死（mkdir 原子锁，无 TOCTOU 竞态）───
+if [ -d "$LOCK" ]; then
     LOCK_AGE=$(( $(date +%s) - $(file_mtime "$LOCK") ))
-    [ "$LOCK_AGE" -gt 3600 ] && rm -f "$LOCK" && log "锁超 ${LOCK_AGE}s，清除"
+    [ "$LOCK_AGE" -gt 3600 ] && rm -rf "$LOCK" && log "锁超 ${LOCK_AGE}s，清除"
 fi
-[ -f "$LOCK" ] && exit 0
-touch "$LOCK"
-trap 'rm -f "$LOCK"' EXIT
+if ! mkdir "$LOCK" 2>/dev/null; then
+    exit 0
+fi
+trap 'rm -rf "$LOCK"' EXIT
 
 # ─── 完成标记 ───
 mkdir -p "$TASKS" "$TASKS/reports" "$TASKS/phases"
