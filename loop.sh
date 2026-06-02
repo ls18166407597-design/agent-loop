@@ -287,3 +287,12 @@ if [ "$WORK_EXIT" -eq 0 ] && [ -n "$REPORT_FILE" ]; then
 fi
 
 log "Round $ROUND 完成"
+
+# ─── 连续执行：完成后立即跑下一轮（不等 cron）───
+# 限制最多连续 3 轮，防止资源占用过多
+MAX_CHAIN="${AGENT_LOOP_CHAIN:-0}"
+if [ "$MAX_CHAIN" -lt 3 ] && [ "$WORK_EXIT" -eq 0 ]; then
+    export AGENT_LOOP_CHAIN=$((MAX_CHAIN + 1))
+    log "连续执行下一轮（chain=$AGENT_LOOP_CHAIN）"
+    exec bash "$SCRIPT_DIR/loop.sh" "$CONFIG"
+fi
