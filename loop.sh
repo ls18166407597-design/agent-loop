@@ -46,7 +46,7 @@ LOCK="/tmp/agent-loop-${PROJECT_HASH}.lock"
 log() {
     local msg="[$(date +%H:%M:%S)] $1"
     echo "$msg" >> "$LOG"
-    [ -t 1 ] && echo "$msg"  # 终端时同时输出到屏幕
+    [ -t 1 ] && echo "$msg" || true  # 终端时同时输出到屏幕
 }
 
 IFS=',' read -ra PHASES <<< "$PHASES_STR"
