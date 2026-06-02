@@ -3,6 +3,23 @@
 > 本文档供 AI Agent（OpenCode / Claude Code）阅读。
 > 用户会告诉你："读取这个文件，帮我配置 agent-loop"。
 
+## 第零步：检查环境
+
+在配置前，先确认依赖已安装：
+
+```bash
+command -v jq && jq --version
+command -v opencode && opencode --version
+# 或
+command -v claude && claude --version
+```
+
+缺少 jq：`brew install jq`（macOS）/ `apt install jq`（Linux）
+缺少 opencode：`curl -fsSL https://opencode.ai/install | bash`
+缺少 claude：`npm install -g @anthropic-ai/claude-code`
+
+agent-loop 自动处理各系统差异（md5/md5sum、stat 语法、会话路径等），无需手动适配。
+
 ## 你的工作流程
 
 ### 第一步：了解用户的目标

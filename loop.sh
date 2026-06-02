@@ -229,16 +229,26 @@ fi
 [ -n "$NEW_CMD_SESSION" ] && echo "$NEW_CMD_SESSION" > "$CMD_SESSION_FILE"
 log "主会话 EXIT=$CMD_EXIT session=$NEW_CMD_SESSION"
 
-# ─── 检查计划 ───
-if [ ! -f "$TASKS/next-plan.md" ]; then
+# ─── 检查计划（兼容 agent-loop/tasks 和 项目/tasks 两个路径）───
+PLAN_FILE=""
+if [ -f "$TASKS/next-plan.md" ]; then
+    PLAN_FILE="$TASKS/next-plan.md"
+elif [ -f "$PROJECT_DIR/tasks/next-plan.md" ]; then
+    PLAN_FILE="$PROJECT_DIR/tasks/next-plan.md"
+fi
+
+if [ -z "$PLAN_FILE" ]; then
     log "无计划文件，跳过"
     exit 0
 fi
 
-if ! grep -qiE "task|goal|step|任务|目标|步骤|执行|plan" "$TASKS/next-plan.md" 2>/dev/null; then
+if ! grep -qiE "task|goal|step|任务|目标|步骤|执行|plan" "$PLAN_FILE" 2>/dev/null; then
     log "无有效计划，跳过"
     exit 0
 fi
+
+# 复制到 agent-loop/tasks 统一管理
+cp "$PLAN_FILE" "$TASKS/next-plan.md" 2>/dev/null || true
 
 # ─── 执行工人会话 ───
 WLOG="$TASKS/round-$(printf "%03d" $ROUND)-worker.log"
@@ -247,9 +257,16 @@ WORK_OUTPUT=$(cd "$PROJECT_DIR" && ${WORKER_AGENT}_invoke "$WORKER_CMD" "$WLOG" 
 WORK_EXIT=$?
 log "工人会话 EXIT=$WORK_EXIT"
 
-# ─── 阶段完成检查 ───
-if [ "$WORK_EXIT" -eq 0 ] && [ -f "$TASKS/report.md" ]; then
-    if grep -qiE "完成|done|complete|success|通过|passed" "$TASKS/report.md" 2>/dev/null; then
+# ─── 阶段完成检查（兼容两个 tasks 路径）───
+REPORT_FILE=""
+if [ -f "$TASKS/report.md" ]; then
+    REPORT_FILE="$TASKS/report.md"
+elif [ -f "$PROJECT_DIR/tasks/report.md" ]; then
+    REPORT_FILE="$PROJECT_DIR/tasks/report.md"
+fi
+
+if [ "$WORK_EXIT" -eq 0 ] && [ -n "$REPORT_FILE" ]; then
+    if grep -qiE "完成|done|complete|success|通过|passed" "$REPORT_FILE" 2>/dev/null; then
         touch "$TASKS/phases/$CURRENT_PHASE.done"
         log "阶段 $CURRENT_PHASE 完成"
     fi

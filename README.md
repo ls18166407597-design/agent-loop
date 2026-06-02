@@ -70,6 +70,65 @@ Agent 会帮你查看状态、处理问题、调整配置。
 | Linux | ✅ |
 | Windows | ⚠️ 需要 WSL |
 
+## 环境要求
+
+agent-loop 本身是纯 bash 脚本，不需要 npm install。但需要以下依赖：
+
+### 必须
+
+| 依赖 | 用途 | 安装 |
+|------|------|------|
+| `jq` | 解析 JSON 配置 | macOS: `brew install jq` / Linux: `apt install jq` 或 `yum install jq` |
+| `opencode` 或 `claude` | AI Agent CLI | 见下方 |
+
+### Agent CLI 安装
+
+**OpenCode（推荐）**
+```bash
+# macOS / Linux 通用
+curl -fsSL https://opencode.ai/install | bash
+# 安装后 opencode 在 /usr/local/bin/opencode 或 ~/.local/bin/opencode
+```
+
+**Claude Code**
+```bash
+npm install -g @anthropic-ai/claude-code
+# 安装后 claude 在 /usr/local/bin/claude 或 ~/.local/bin/claude
+```
+
+### Agent 权限配置
+
+agent-loop 需要 Agent 自动批准操作，否则会卡在权限确认：
+
+**OpenCode**：编辑 `~/.config/opencode/opencode.json`，添加：
+```json
+{ "permission": { "*": "allow" } }
+```
+
+**Claude Code**：loop.sh 自动加 `--dangerously-skip-permissions`，无需配置。
+
+### Cron 运行（可选）
+
+如果用 cron 定时触发，cron 环境 PATH 很短。loop.sh 已自动补全 `/usr/local/bin`，但如果你的 CLI 装在非标准位置（如 `~/.nvm`、`~/.bun`），需要在 crontab 顶部加 PATH：
+
+```bash
+crontab -e
+# 在顶部加：
+PATH=/usr/local/bin:/usr/bin:/bin:/root/.nvm/versions/node/v20/bin
+*/10 * * * * cd /path/to/agent-loop && bash loop.sh >> /tmp/agent-loop-cron.log 2>&1
+```
+
+### 各系统差异
+
+| 差异点 | macOS | Linux | WSL |
+|--------|-------|-------|-----|
+| `md5` 命令 | `md5` | `md5sum` | `md5sum` |
+| `stat` 语法 | `stat -f %m` | `stat -c %Y` | `stat -c %Y` |
+| Claude 会话路径 | `~/Library/Application Support/claude/` | `~/.claude/` | `~/.claude/` |
+| OpenCode 会话路径 | `~/.local/share/opencode/` | `~/.local/share/opencode/` | `~/.local/share/opencode/` |
+
+以上差异 agent-loop 已自动处理，无需手动适配。
+
 ## 支持的 Agent
 
 | Agent | 主会话 | 工人会话 |
