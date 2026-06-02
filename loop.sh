@@ -321,5 +321,6 @@ log "Round $ROUND 完成"
 # ─── 连续执行：完成后立即跑下一轮（不等 cron）───
 if [ "$WORK_EXIT" -eq 0 ]; then
     log "连续执行下一轮"
+    rm -rf "$LOCK"  # exec 前手动清理锁（trap 不会执行）
     exec bash "$SCRIPT_DIR/loop.sh" "$CONFIG"
 fi
