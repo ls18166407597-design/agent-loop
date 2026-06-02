@@ -2,44 +2,80 @@
 
 > 本文档供 AI Agent（OpenCode / Claude Code）阅读。
 > 用户会告诉你："读取这个文件，帮我配置 agent-loop"。
-> 请按以下步骤执行。
 
-## 第一步：了解项目
+## 你的工作流程
 
-1. 读取项目根目录的 `package.json` 或 `README.md`
-2. 了解项目类型（前端/后端/全栈/CLI/库）
-3. 了解技术栈（语言、框架、测试工具）
-4. 了解项目结构（源码、测试、文档位置）
+### 第一步：了解用户的目标
 
-## 第二步：与用户确认需求
-
-向用户提问：
-
-1. "你的项目主要需要哪些优化？"
-   - 测试补全
+问用户：
+1. "你想用 agent-loop 做什么？"
+   - 提升代码质量（测试、lint、类型检查）
    - 安全加固
    - 文档完善
-   - 前端体验
    - 性能优化
-   - 代码清理
+   - 新功能开发
+   - Bug 修复
    - 其他
 
-2. "你希望用哪个 Agent 来执行？"
-   - OpenCode（推荐，支持多模型）
-   - Claude Code
-   - 混搭（主会话用 A，工人用 B）
+2. "你希望每个阶段多长时间？"
+   - 建议：15-30 分钟（太长容易超时，太短做不完）
 
-3. "每轮任务的时间限制？"
-   - 建议：20-30 分钟
+3. "你希望用哪个 Agent？"
+   - OpenCode (OC)
+   - Claude Code (CC)
 
-## 第三步：生成阶段文件
+### 第二步：分析项目
 
-根据项目情况，在 `agent-loop/phases/` 目录生成阶段文件。
+1. 读取项目根目录的 `package.json` / `README.md` / 目录结构
+2. 了解项目类型（前端/后端/全栈/CLI/库）
+3. 了解技术栈（语言、框架、测试工具）
+4. 检查当前状态（测试覆盖、lint 状态、文档完整性）
 
-每个阶段文件格式：
+### 第三步：建议阶段
 
+根据用户目标和项目状态，建议 3-5 个阶段。每个阶段：
+- 一个具体目标
+- 可在 15-30 分钟内完成
+- 有明确的成功标准
+
+**示例**（用户想提升代码质量）：
+```
+01-test-baseline    — 运行全量测试，修复失败用例
+02-lint-fix         — 运行 lint，修复所有 warning
+03-security-scan    — 安全审查，修复 HIGH 级别问题
+04-final-verify     — 全量回归验证
+```
+
+**示例**（用户想开发新功能）：
+```
+01-design           — 分析需求，设计方案
+02-implement        — 实现核心功能
+03-test             — 编写测试
+04-docs             — 更新文档
+```
+
+**示例**（用户想部署上线）：
+```
+01-docker-build     — Docker 构建验证
+02-env-config       — 环境变量配置检查
+03-health-check     — 健康检查端点验证
+04-smoke-test       — 冒烟测试
+```
+
+### 第四步：与用户确认
+
+把建议的阶段展示给用户，问：
+- "这些阶段合适吗？"
+- "需要调整顺序吗？"
+- "需要增加或删除某个阶段吗？"
+
+### 第五步：生成配置
+
+确认后，在 `agent-loop/` 目录生成：
+
+1. **阶段文件** `phases/01-xxx.md`：
 ```markdown
-# 阶段 XX：[名称]
+# 阶段 01：[名称]
 
 ## 目标
 [一句话]
@@ -47,120 +83,45 @@
 ## 具体任务
 - [任务1]
 - [任务2]
-- ...
 
 ## 成功标准
 - [标准1]
-- [标准2]
 
 ## 时间限制
 20 分钟
 ```
 
-### 推荐阶段模板
-
-根据项目类型选择：
-
-**通用项目**
-```
-01-setup    → 搭建/初始化
-02-tests    → 测试基线
-03-security → 安全审查
-04-docs     → 文档审查
-05-final    → 最终验收
-```
-
-**Web 应用（含前端）**
-```
-01-setup    → 搭建/初始化
-02-tests    → 测试基线
-03-security → 安全审查
-04-docs     → 文档审查
-05-frontend → 前端优化
-06-e2e      → 端到端验证
-07-final    → 最终验收
-```
-
-**库/CLI 工具**
-```
-01-setup    → 搭建/初始化
-02-tests    → 测试基线
-03-docs     → 文档审查（API 文档重要）
-04-final    → 最终验收
-```
-
-**已有成熟项目的优化**
-```
-01-tests    → 修复失败测试
-02-security → 安全扫描
-03-docs     → 文档同步
-04-final    → 最终验收
-```
-
-## 第四步：生成配置文件
-
-在 `agent-loop/` 目录生成 `agent-loop.json`：
-
+2. **配置文件** `agent-loop.json`：
 ```json
 {
   "commander_agent": "opencode",
   "worker_agent": "opencode",
   "project_dir": "/absolute/path/to/project",
-  "timeout_minutes": 30,
-  "phases": "01-setup,02-tests,03-security,04-docs,05-final",
+  "timeout_minutes": 60,
+  "phases": "01-xxx,02-xxx,03-xxx",
   "commander_extra_instructions": "",
   "worker_extra_instructions": ""
 }
 ```
 
-### 配置说明
-
-| 字段 | 说明 | 默认值 |
-|------|------|--------|
-| `commander_agent` | 主会话用哪个 Agent | `"opencode"` |
-| `worker_agent` | 工人会话用哪个 Agent | `"opencode"` |
-| `project_dir` | 目标项目绝对路径 | `"."` |
-| `timeout_minutes` | 每轮超时时间 | `30` |
-| `phases` | 阶段列表（逗号分隔） | 见模板 |
-| `commander_extra_instructions` | 给主会话的额外指令 | `""` |
-| `worker_extra_instructions` | 给工人会话的额外指令 | `""` |
-
-## 第五步：验证配置
-
-配置完成后，运行验证：
-
-```bash
-cd agent-loop
-./manage.sh status
-```
-
-确认：
-- 所有阶段文件存在
-- 配置文件格式正确
-- 项目目录存在
-
-## 第六步：告知用户
+### 第六步：告知用户
 
 告诉用户：
-
 ```
 配置完成！你可以：
 
-1. 启动：./manage.sh start
+1. 测试一轮：cd agent-loop && ./manage.sh start
 2. 后台运行：nohup ./loop.sh &
 3. 查看状态：./manage.sh status
-4. 查看日志：./manage.sh log
-5. 停止：./manage.sh stop
-6. 重置：./manage.sh reset
-
-建议先用 './manage.sh start' 看一轮效果，确认正常后再后台运行。
+4. 停止：./manage.sh stop
 ```
 
 ## 注意事项
 
-1. **项目目录必须是绝对路径**，不能用 `~` 或相对路径
-2. **Agent 必须配置为自动批准**，否则会卡在权限确认
-   - OpenCode：`~/.config/opencode/opencode.json` 设 `"permission": {"*": "allow"}`
-   - Claude Code：loop.sh 自动加 `--dangerously-skip-permissions`
-3. **阶段文件名必须与配置中的 phases 一致**，如 `01-setup` 对应 `phases/01-setup.md`
-4. **每个阶段控制在 20 分钟内**，太大会导致超时
+1. **项目目录必须是绝对路径**
+2. **Agent 必须配置为自动批准**
+   - OpenCode：`"permission": {"*": "allow"}`
+   - Claude Code：loop.sh 自动处理
+3. **阶段文件名必须与配置一致**
+4. **每个阶段控制在 30 分钟内**
+5. **不要硬编码阶段** — 让用户和 Agent 一起决定
