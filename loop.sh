@@ -101,9 +101,23 @@ if ! mkdir "$LOCK" 2>/dev/null; then
 fi
 trap 'rm -rf "$LOCK"' EXIT
 
-# ─── 完成标记 ───
+# ─── 完成标记（仅当所有阶段都完成时才生效）───
 mkdir -p "$TASKS" "$TASKS/reports" "$TASKS/phases"
-[ -f "$TASKS/.done" ] && exit 0
+if [ -f "$TASKS/.done" ]; then
+    # 检查是否所有阶段都已完成（防止新增阶段被跳过）
+    ALL_DONE=true
+    IFS=',' read -ra _CHECK_PHASES <<< "$PHASES_STR"
+    for _phase in "${_CHECK_PHASES[@]}"; do
+        _phase=$(echo "$_phase" | tr -d '[:space:]')
+        [ -z "$_phase" ] && continue
+        if [ ! -f "$TASKS/phases/$_phase.done" ]; then
+            ALL_DONE=false
+            rm -f "$TASKS/.done"
+            break
+        fi
+    done
+    [ "$ALL_DONE" = true ] && exit 0
+fi
 
 # ─── 验证适配器 ───
 for agent in "$COMMANDER_AGENT" "$WORKER_AGENT"; do
