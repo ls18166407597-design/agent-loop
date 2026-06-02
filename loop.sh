@@ -131,7 +131,8 @@ CMD_PATTERN=$(${COMMANDER_AGENT}_get_pattern)
 source "$SCRIPT_DIR/adapters/$WORKER_AGENT.sh"
 WORK_PATTERN=$(${WORKER_AGENT}_get_pattern)
 
-# ─── 超时检查 ───
+# ─── 超时检查与恢复 ───
+TIMEOUT_KILLED=false
 check_and_kill() {
     local pattern="$1"
     local pid=$(find_pid "$pattern")
@@ -142,6 +143,7 @@ check_and_kill() {
     if [ "$age" -ge "$TIMEOUT" ]; then
         kill -TERM -- "-$pid" 2>/dev/null || kill -9 "$pid" 2>/dev/null
         log "超时 kill ($pattern, AGE=${age}min)"
+        TIMEOUT_KILLED=true
         return 1
     fi
     return 0
@@ -150,7 +152,15 @@ check_and_kill() {
 if [ -n "$(find_pid "$CMD_PATTERN")" ] || [ -n "$(find_pid "$WORK_PATTERN")" ]; then
     check_and_kill "$CMD_PATTERN"
     check_and_kill "$WORK_PATTERN"
-    exit 0
+    # 超时 kill 后继续执行（不退出），让后续逻辑处理恢复
+    if [ "$TIMEOUT_KILLED" = true ]; then
+        log "超时恢复：清理完成，继续执行"
+        # 清理锁，允许继续
+        rm -rf "$LOCK"
+    else
+        # 还有进程在跑，等下次 cron
+        exit 0
+    fi
 fi
 
 # ─── 初始化 ───
@@ -228,12 +238,23 @@ CMD_SESSION_FILE="$TASKS/commander-session.txt"
 CMD_SESSION_ID=""
 [ -f "$CMD_SESSION_FILE" ] && [ -s "$CMD_SESSION_FILE" ] && CMD_SESSION_ID=$(cat "$CMD_SESSION_FILE")
 
-# ─── 执行主会话 ───
+# ─── 执行规划会话（带超时保护）───
 RLOG="$TASKS/round-$(printf "%03d" $ROUND)-commander.log"
 log "Round $ROUND: 规划会话启动 ($COMMANDER_AGENT, session=${CMD_SESSION_ID:-新建})"
 
-CMD_OUTPUT=$(cd "$PROJECT_DIR" && ${COMMANDER_AGENT}_invoke "$COMMANDER_CMD" "$RLOG" "$CMD_SESSION_ID" "$PROJECT_DIR" 2>&1)
+# 跨平台超时：后台运行 + watchdog
+SESSION_TIMEOUT=$((TIMEOUT * 60))
+(
+    cd "$PROJECT_DIR" && ${COMMANDER_AGENT}_invoke "$COMMANDER_CMD" "$RLOG" "$CMD_SESSION_ID" "$PROJECT_DIR"
+) > "$RLOG.output" 2>&1 &
+CMD_PID=$!
+( sleep "$SESSION_TIMEOUT" && kill -9 "$CMD_PID" 2>/dev/null && log "规划会话超时 kill (PID=$CMD_PID)" ) &
+WATCHDOG_PID=$!
+wait "$CMD_PID" 2>/dev/null
 CMD_EXIT=$?
+kill "$WATCHDOG_PID" 2>/dev/null
+CMD_OUTPUT=$(cat "$RLOG.output" 2>/dev/null)
+rm -f "$RLOG.output"
 
 # 提取 session ID（UUID 格式或长字符串）
 NEW_CMD_SESSION=$(echo "$CMD_OUTPUT" | tail -1 | tr -d '[:space:]' | grep -oE '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}' | head -1 || true)
@@ -264,11 +285,20 @@ fi
 # 复制到 agent-loop/tasks 统一管理
 cp "$PLAN_FILE" "$TASKS/next-plan.md" 2>/dev/null || true
 
-# ─── 执行执行会话 ───
+# ─── 执行执行会话（带超时保护）───
 WLOG="$TASKS/round-$(printf "%03d" $ROUND)-worker.log"
 log "Round $ROUND: 执行会话启动 ($WORKER_AGENT)"
-WORK_OUTPUT=$(cd "$PROJECT_DIR" && ${WORKER_AGENT}_invoke "$WORKER_CMD" "$WLOG" "" "$PROJECT_DIR" 2>&1)
+(
+    cd "$PROJECT_DIR" && ${WORKER_AGENT}_invoke "$WORKER_CMD" "$WLOG" "" "$PROJECT_DIR"
+) > "$WLOG.output" 2>&1 &
+WORK_PID=$!
+( sleep "$SESSION_TIMEOUT" && kill -9 "$WORK_PID" 2>/dev/null && log "执行会话超时 kill (PID=$WORK_PID)" ) &
+WATCHDOG_PID=$!
+wait "$WORK_PID" 2>/dev/null
 WORK_EXIT=$?
+kill "$WATCHDOG_PID" 2>/dev/null
+WORK_OUTPUT=$(cat "$WLOG.output" 2>/dev/null)
+rm -f "$WLOG.output"
 log "执行会话 EXIT=$WORK_EXIT"
 
 # ─── 阶段完成检查（兼容两个 tasks 路径）───
