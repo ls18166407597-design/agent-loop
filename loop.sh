@@ -301,19 +301,11 @@ WORK_OUTPUT=$(cat "$WLOG.output" 2>/dev/null)
 rm -f "$WLOG.output"
 log "执行会话 EXIT=$WORK_EXIT"
 
-# ─── 阶段完成检查（兼容两个 tasks 路径）───
-REPORT_FILE=""
-if [ -f "$TASKS/report.md" ]; then
-    REPORT_FILE="$TASKS/report.md"
-elif [ -f "$PROJECT_DIR/tasks/report.md" ]; then
-    REPORT_FILE="$PROJECT_DIR/tasks/report.md"
-fi
-
-if [ "$WORK_EXIT" -eq 0 ] && [ -n "$REPORT_FILE" ]; then
-    if grep -qiE "完成|done|complete|success|通过|passed" "$REPORT_FILE" 2>/dev/null; then
-        touch "$TASKS/phases/$CURRENT_PHASE.done"
-        log "阶段 $CURRENT_PHASE 完成"
-    fi
+# ─── 阶段完成检查 ───
+# 阶段完成目前完全依赖 Agent 在打磨通过后自行创建对应的 done 标志文件：$TASKS/phases/$CURRENT_PHASE.done
+# loop.sh 不再执行模糊的文本匹配，防止造成阶段完成状态误判。
+if [ "$WORK_EXIT" -eq 0 ] && [ -f "$TASKS/phases/$CURRENT_PHASE.done" ]; then
+    log "检测到 Agent 已写入 done 状态，阶段 $CURRENT_PHASE 完成"
 fi
 
 log "Round $ROUND 完成"
