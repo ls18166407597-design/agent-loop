@@ -2,7 +2,7 @@
   "commander_agent": "opencode",
   "worker_agent": "opencode",
   "project_dir": "/path/to/your/project",
-  "timeout_minutes": 30,
+  "timeout_minutes": 60,
   "phases": "01-tests,02-security,03-docs,04-final",
   "commander_extra_instructions": "",
   "worker_extra_instructions": ""

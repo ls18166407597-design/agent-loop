@@ -224,7 +224,7 @@ cat > "$SCRIPT_DIR/agent-loop.json" << EOF
   "commander_agent": "$AGENT",
   "worker_agent": "$AGENT",
   "project_dir": "$PROJECT_DIR",
-  "timeout_minutes": 30,
+  "timeout_minutes": 60,
   "phases": "$PHASES",
   "commander_extra_instructions": "",
   "worker_extra_instructions": ""

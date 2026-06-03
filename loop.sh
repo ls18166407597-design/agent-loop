@@ -26,7 +26,7 @@ done
 COMMANDER_AGENT=$(jq -r '.commander_agent // .agent // "opencode"' "$CONFIG")
 WORKER_AGENT=$(jq -r '.worker_agent // .agent // "opencode"' "$CONFIG")
 PROJECT_DIR=$(jq -r '.project_dir // "."' "$CONFIG")
-TIMEOUT=$(jq -r '.timeout_minutes // 30' "$CONFIG")
+TIMEOUT=$(jq -r '.timeout_minutes // 60' "$CONFIG")
 PHASES_STR=$(jq -r '.phases // ""' "$CONFIG")
 COMMANDER_EXTRA=$(jq -r '.commander_extra_instructions // ""' "$CONFIG")
 WORKER_EXTRA=$(jq -r '.worker_extra_instructions // ""' "$CONFIG")
