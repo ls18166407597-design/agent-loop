@@ -206,7 +206,7 @@ $PHASE_DESC
 你的职责：
 1. 读取 tasks/progress.md 了解整体进度
 2. 读取 tasks/report.md 了解上一轮结果（可能为空）
-3. 分析当前阶段还需要做什么
+3. 分析当前阶段还需要做什么。如果分析后确认当前阶段的所有目标已经圆满完成，无需再做任何代码修改，请在 tasks/next-plan.md 中列出任务：创建阶段完成标志文件：touch tasks/phases/$CURRENT_PHASE.done。
 4. 写一个具体的工作计划到 tasks/next-plan.md
 5. 计划必须在 20 分钟内可完成
 6. 退出
@@ -230,6 +230,7 @@ WORKER_CMD="你是执行会话。
 不要改 .env、ecosystem.config.js、nginx 配置。
 如果修改了代码，运行 npm run check。通过则 git commit + push。
 注意：如果你的修改导致编译/检查（如 npm run check/typecheck）失败，且你在本轮退出前无法修复它们，请务必执行 git checkout . (以及 git clean -fd) 撤销你本轮所做的所有修改，切勿将无法通过编译的脏代码留在工作区中。
+重要：如果你确认当前阶段的任务已经全部圆满完成，且无需进一步修改，请务必在退出前执行：touch tasks/phases/$CURRENT_PHASE.done（或按照计划执行该命令）。如果不写入该 done 标志文件，引擎将永远在此阶段循环。
 完成后退出。
 
 $WORKER_EXTRA"
