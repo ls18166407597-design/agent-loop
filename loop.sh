@@ -229,6 +229,7 @@ WORKER_CMD="你是执行会话。
 
 不要改 .env、ecosystem.config.js、nginx 配置。
 如果修改了代码，运行 npm run check。通过则 git commit + push。
+注意：如果你的修改导致编译/检查（如 npm run check/typecheck）失败，且你在本轮退出前无法修复它们，请务必执行 git checkout . (以及 git clean -fd) 撤销你本轮所做的所有修改，切勿将无法通过编译的脏代码留在工作区中。
 完成后退出。
 
 $WORKER_EXTRA"
@@ -300,6 +301,16 @@ kill "$WATCHDOG_PID" 2>/dev/null
 WORK_OUTPUT=$(cat "$WLOG.output" 2>/dev/null)
 rm -f "$WLOG.output"
 log "执行会话 EXIT=$WORK_EXIT"
+
+# ─── 异常退出自动代码回滚 ───
+if [ "$WORK_EXIT" -ne 0 ]; then
+    log "警告: 执行会话异常退出 (EXIT=$WORK_EXIT)，执行自动代码回滚以清理脏现场"
+    (
+        cd "$PROJECT_DIR"
+        git reset --hard HEAD >/dev/null 2>&1 || true
+        git clean -fd >/dev/null 2>&1 || true
+    )
+fi
 
 # ─── 阶段完成检查 ───
 # 阶段完成目前完全依赖 Agent 在打磨通过后自行创建对应的 done 标志文件：$TASKS/phases/$CURRENT_PHASE.done
